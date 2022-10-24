@@ -46,6 +46,7 @@ class session : public std::enable_shared_from_this<session> {
     std::wstring path_;
     std::wstring text_;
     bool is_first_write_;
+    std::vector<std::shared_ptr<std::string const>> queue_;
 
 public:
     /// Resolver and socket require an io_context
@@ -62,8 +63,15 @@ public:
 
         const std::string to_send = utf8_encode(data);
 
+        // Always add to queue
+        queue_.push_back(std::make_shared<std::string>(to_send));
+
+        // Are we already writing?
+        if (queue_.size() > 1)
+            return;
+
         ws_.async_write(
-                net::buffer(to_send),
+                net::buffer(*queue_.front()),
                 beast::bind_front_handler(
                         &session::on_write,
                         shared_from_this()));
@@ -197,16 +205,12 @@ public:
         // Send the message
         if(EnableVerbose)
             std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_read in on_handshake" << std::endl;
+
         ws_.async_read(
                 buffer_,
                 beast::bind_front_handler(
                         &session::on_read,
                         shared_from_this()));
-//        ws_.async_write(
-//                net::buffer(text_),
-//                beast::bind_front_handler(
-//                        &session::on_write,
-//                        shared_from_this()));
     }
 
     /// Callback registered by async_write. It issue an async_read call to wait for data from websocket server
@@ -226,13 +230,20 @@ public:
             return fail(ec, L"write");
         }
 
-        if(EnableVerbose)
-            std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_read in on_write" << std::endl;
-        ws_.async_read(
-                buffer_,
+        // Remove the string from the queue
+        queue_.erase(queue_.begin());
+
+        // Send the next message if any
+        if (!queue_.empty()) {
+            if(EnableVerbose)
+                std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_write in on_write" << std::endl;
+
+            ws_.async_write(
+                net::buffer(*queue_.front()),
                 beast::bind_front_handler(
-                        &session::on_read,
-                        shared_from_this()));
+                    &session::on_write,
+                    shared_from_this()));
+        }
     }
 
     /// Callback registered by async_read. It calls user registered callback to actually process the data. And then issue another async_read to wait for data from server again.
@@ -329,6 +340,13 @@ std::wstring utf8_decode(const std::string &str)
     std::wstring wstrTo(size_needed, 0);
     MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
+}
+
+/// Print error related information in stderr
+/// \param ec instance that contains error related information
+/// \param what customize prefix in output
+void fail(beast::error_code ec, wchar_t const *what) {
+    std::cerr << what << L": " << ec.message() << std::endl;
 }
 
 EXPORT void enable_verbose(intptr_t enabled);

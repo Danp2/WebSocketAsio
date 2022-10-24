@@ -20,13 +20,6 @@ boost::mutex mtx_;
 // To indicate if the server is running or not
 bool Is_Connected = false;
 
-/// Print error related information in stderr
-/// \param ec instance that contains error related information
-/// \param what customize prefix in output
-void fail(beast::error_code ec, wchar_t const *what) {
-    std::cerr << what << L": " << ec.message() << std::endl;
-}
-
 EXPORT void enable_verbose(intptr_t enabled) {
     if(enabled)
         std::wcout << L"<WsDll-" ARCH_LABEL "> Verbose output enabled" << std::endl;
