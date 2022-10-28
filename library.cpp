@@ -71,10 +71,10 @@ EXPORT size_t websocket_connect(const wchar_t *szServer) {
             tmp_path.append(L"/");
         }
         Session_Ioc->run(host.c_str(), port.c_str(), tmp_path.c_str(), L"");
-        {
-            boost::lock_guard<boost::mutex> guard(mtx_);
-            Is_Connected = true;
-        }
+        // {
+        //     boost::lock_guard<boost::mutex> guard(mtx_);
+        //     Is_Connected = true;
+        // }
         if(EnableVerbose)
             std::wcout << L"<WsDll-" ARCH_LABEL "> Calling Ioc.run()" << std::endl;
         Ioc.run();
@@ -161,3 +161,15 @@ EXPORT size_t websocket_register_on_data_cb(size_t dwAddress) {
 
     return 1;
 }
+
+
+// EXPORT void enable_verbose(intptr_t enabled);
+// EXPORT size_t websocket_connect(const wchar_t *szServer);
+// EXPORT size_t websocket_disconnect();
+// EXPORT size_t websocket_send(const wchar_t *szMessage, size_t dwLen, bool isBinary);
+// EXPORT size_t websocket_isconnected();
+
+// EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress);
+// EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress);
+// EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress);
+// EXPORT size_t websocket_register_on_data_cb(size_t dwAddress);

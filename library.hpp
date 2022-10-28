@@ -238,6 +238,12 @@ public:
         if (on_connect_cb)
             on_connect_cb();
 
+		// Update connected status
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
+            Is_Connected = true;
+        }
+
         // Send the message
         if(EnableVerbose)
             std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_read in on_handshake" << std::endl;
@@ -357,16 +363,4 @@ public:
         // std::wcout << beast::make_printable(buffer_.data()) << std::endl;
     }
 };
-
-EXPORT void enable_verbose(intptr_t enabled);
-EXPORT size_t websocket_connect(const wchar_t *szServer);
-EXPORT size_t websocket_disconnect();
-EXPORT size_t websocket_send(const wchar_t *szMessage, size_t dwLen, bool isBinary);
-EXPORT size_t websocket_isconnected();
-
-EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress);
-EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress);
-EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress);
-EXPORT size_t websocket_register_on_data_cb(size_t dwAddress);
-
 #endif //WebSocketAsio_LIBRARY_H
