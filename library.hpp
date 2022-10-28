@@ -37,6 +37,42 @@ typedef void (*on_fail_t)(const wchar_t* from);
 typedef void (*on_disconnect_t)();
 typedef void (*on_data_t)(const wchar_t*, size_t);
 
+extern int EnableVerbose;
+extern bool Is_Connected;
+extern net::io_context Ioc;
+extern on_connect_t on_connect_cb;
+extern on_fail_t on_fail_cb;
+extern on_disconnect_t on_disconnect_cb;
+extern on_data_t on_data_cb;
+extern boost::mutex mtx_;
+
+// Convert a wide Unicode string to an UTF8 string
+std::string utf8_encode(const std::wstring &wstr)
+{
+    if (wstr.empty()) return std::string();
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    return strTo;
+}
+
+// Convert an UTF8 string to a wide Unicode String
+std::wstring utf8_decode(const std::string &str)
+{
+    if (str.empty()) return std::wstring();
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstrTo(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
+}
+
+/// Print error related information in stderr
+/// \param ec instance that contains error related information
+/// \param what customize prefix in output
+void fail(beast::error_code ec, wchar_t const *what) {
+    std::cerr << what << L": " << ec.message() << std::endl;
+}
+
 class session : public std::enable_shared_from_this<session> {
     tcp::resolver resolver_;
     websocket::stream<beast::tcp_stream> ws_;
@@ -321,33 +357,6 @@ public:
         // std::wcout << beast::make_printable(buffer_.data()) << std::endl;
     }
 };
-
-// Convert a wide Unicode string to an UTF8 string
-std::string utf8_encode(const std::wstring &wstr)
-{
-    if (wstr.empty()) return std::string();
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    std::string strTo(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-    return strTo;
-}
-
-// Convert an UTF8 string to a wide Unicode String
-std::wstring utf8_decode(const std::string &str)
-{
-    if (str.empty()) return std::wstring();
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    std::wstring wstrTo(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
-    return wstrTo;
-}
-
-/// Print error related information in stderr
-/// \param ec instance that contains error related information
-/// \param what customize prefix in output
-void fail(beast::error_code ec, wchar_t const *what) {
-    std::cerr << what << L": " << ec.message() << std::endl;
-}
 
 EXPORT void enable_verbose(intptr_t enabled);
 EXPORT size_t websocket_connect(const wchar_t *szServer);
