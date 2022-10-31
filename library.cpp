@@ -41,20 +41,24 @@ EXPORT size_t websocket_connect(const wchar_t *szServer) {
         }
     }
 
-    boost::regex pat(R"(^wss?://([\w\.]+):(\d+)(.*)$)");
-
     const std::wstring line(szServer);
     const std::string utf_line = utf8_encode(line);
+	// urls::url_view uv(utf_line);
 
-    boost::smatch matches;
-    if (!boost::regex_match(utf_line, matches, pat)) {
-        std::wcerr << L"<WsDll-" ARCH_LABEL "> failed to parse host & port. Correct example: ws://localhost:8080/" << std::endl;
+    urls::url_view uv = urls::parse_uri(utf_line).value();
+
+    const std::wstring scheme = utf8_decode(uv.scheme());
+    const std::wstring host = utf8_decode(uv.host());
+    const std::wstring path = utf8_decode(uv.path());
+    const std::wstring port = (!uv.port().empty()) 
+		? utf8_decode(uv.port()) 
+		: std::to_wstring(urls::default_port(urls::string_to_scheme(uv.scheme())));
+
+    if (host.empty() || port.empty()) {
+        std::wcerr << L"<WsDll-" ARCH_LABEL "> failed to parse host & port." << std::endl;
         return 0;
     }
 
-    const std::wstring host(matches[1].begin(), matches[1].end());
-    const std::wstring port(matches[2].begin(), matches[2].end());
-    const std::wstring path(matches[3].begin(), matches[3].end());
     if(EnableVerbose)
 	{
 		boost::lock_guard<boost::mutex> guard(mtx_);
