@@ -95,7 +95,10 @@ public:
     /// \param data to be sent
     void send_message(const std::wstring &data) {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL ">> Sending message: " << data << std::endl;
+        }		
 
         const std::string to_send = utf8_encode(data);
 
@@ -116,7 +119,10 @@ public:
     /// Close the connect between websocket client and server. It call async_close to call a callback function which also calls user registered callback function to deal with close event.
     void disconnect() {
         if(EnableVerbose)
-            std::wcout << L"<WsDll-" ARCH_LABEL "> Disconnecting" << std::endl;
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
+			std::wcout << L"<WsDll-" ARCH_LABEL "> Disconnecting" << std::endl;
+        }		
 
         ws_.async_close(websocket::close_code::normal,
                         beast::bind_front_handler(
@@ -184,7 +190,10 @@ public:
     void
     on_connect(beast::error_code ec, tcp::resolver::results_type::endpoint_type ep) {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> in on connect" << std::endl;
+        }		
         if (ec) {
             if(on_fail_cb)
                 on_fail_cb(L"connect");
@@ -228,7 +237,10 @@ public:
     void
     on_handshake(beast::error_code ec) {
         if(EnableVerbose)
-            std::wcout << L"<WsDll-" ARCH_LABEL "> in on handshake" << std::endl;
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
+			std::wcout << L"<WsDll-" ARCH_LABEL "> in on handshake" << std::endl;
+        }		
         if (ec) {
             if(on_fail_cb)
                 on_fail_cb(L"handshake");
@@ -246,7 +258,10 @@ public:
 
         // Send the message
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_read in on_handshake" << std::endl;
+        }		
 
         ws_.async_read(
                 buffer_,
@@ -263,7 +278,10 @@ public:
             beast::error_code ec,
             std::size_t bytes_transferred) {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> in on write" << std::endl;
+        }		
         boost::ignore_unused(bytes_transferred);
 
         if (ec) {
@@ -278,7 +296,10 @@ public:
         // Send the next message if any
         if (!queue_.empty()) {
             if(EnableVerbose)
-                std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_write in on_write" << std::endl;
+	        {
+				boost::lock_guard<boost::mutex> guard(mtx_);
+				std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_write in on_write" << std::endl;
+    	    }		
 
             ws_.async_write(
                 net::buffer(*queue_.front()),
@@ -296,7 +317,10 @@ public:
             beast::error_code ec,
             std::size_t bytes_transferred) {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> in on read" << std::endl;
+        }		
         boost::ignore_unused(bytes_transferred);
 
         {
@@ -317,7 +341,10 @@ public:
         const std::string data = beast::buffers_to_string(buffer_.data());
         const std::wstring wdata(data.begin(), data.end());
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> received[" << bytes_transferred << L"] " << wdata << std::endl;
+        }		
 
 //        const std::string str(wdata.begin(), wdata.end());
 
@@ -327,7 +354,10 @@ public:
         buffer_.consume(buffer_.size());
 
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> issue new async_read in on_read" << std::endl;
+        }		
         ws_.async_read(
                 buffer_,
                 beast::bind_front_handler(
@@ -346,7 +376,10 @@ public:
     void
     on_close(beast::error_code ec) {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> in on close" << std::endl;
+        }		
         if (ec)
             fail(ec, L"close");
 

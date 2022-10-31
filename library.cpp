@@ -21,10 +21,13 @@ boost::mutex mtx_;
 bool Is_Connected = false;
 
 EXPORT void enable_verbose(intptr_t enabled) {
-    if(enabled)
-        std::wcout << L"<WsDll-" ARCH_LABEL "> Verbose output enabled" << std::endl;
-    else
-        std::wcout << L"<WsDll-" ARCH_LABEL "> Verbose output disabled" << std::endl;
+	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
+		if(enabled)
+			std::wcout << L"<WsDll-" ARCH_LABEL "> Verbose output enabled" << std::endl;
+		else
+			std::wcout << L"<WsDll-" ARCH_LABEL "> Verbose output disabled" << std::endl;
+	}		
 
     EnableVerbose = enabled;
 }
@@ -53,16 +56,20 @@ EXPORT size_t websocket_connect(const wchar_t *szServer) {
     const std::wstring port(matches[2].begin(), matches[2].end());
     const std::wstring path(matches[3].begin(), matches[3].end());
     if(EnableVerbose)
-        std::wcout << L"<WsDll-" ARCH_LABEL "> host: " << host << L", port: " << port << L", path: " << path << std::endl;
-
-    if(EnableVerbose)
+	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
+		std::wcout << L"<WsDll-" ARCH_LABEL "> host: " << host << L", port: " << port << L", path: " << path << std::endl;
         std::wcout << L"<WsDll-" ARCH_LABEL "> Connecting to the server: " << szServer << std::endl;
+	}		
 
     Session_Ioc = std::make_shared<session>(Ioc);
     // must pass value to lambda otherwise it will cause unexpected exit (no any error message)
     New_Thread = boost::thread([path, host, port]() {
         if(EnableVerbose)
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
             std::wcout << L"<WsDll-" ARCH_LABEL "> in thread" << std::endl;
+        }		
         Ioc.stop();
         Ioc.reset();
         std::wstring tmp_path = path;
@@ -76,12 +83,17 @@ EXPORT size_t websocket_connect(const wchar_t *szServer) {
         //     Is_Connected = true;
         // }
         if(EnableVerbose)
-            std::wcout << L"<WsDll-" ARCH_LABEL "> Calling Ioc.run()" << std::endl;
-        Ioc.run();
-        if(EnableVerbose)
-            std::wcout << L"<WsDll-" ARCH_LABEL "> After calling Ioc.run()" << std::endl;
         {
             boost::lock_guard<boost::mutex> guard(mtx_);
+            std::wcout << L"<WsDll-" ARCH_LABEL "> Calling Ioc.run()" << std::endl;
+        }		
+        Ioc.run();
+        {
+            boost::lock_guard<boost::mutex> guard(mtx_);
+
+			if(EnableVerbose)
+				std::wcout << L"<WsDll-" ARCH_LABEL "> After calling Ioc.run()" << std::endl;
+
             Is_Connected = false;
         }
         Ioc.stop();
@@ -132,7 +144,10 @@ EXPORT size_t websocket_isconnected() {
 
 EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress) {
     if(EnableVerbose)
-        std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_connect callback" << std::endl;
+	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
+		std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_connect callback" << std::endl;
+	}		
     on_connect_cb = reinterpret_cast<on_connect_t>(dwAddress);
 
     return 1;
@@ -140,7 +155,10 @@ EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress) {
 
 EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress) {
     if(EnableVerbose)
-        std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_fail callback" << std::endl;
+ 	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
+		std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_fail callback" << std::endl;
+	}
     on_fail_cb = reinterpret_cast<on_fail_t>(dwAddress);
 
     return 1;
@@ -148,7 +166,10 @@ EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress) {
 
 EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress) {
     if(EnableVerbose)
-        std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_disconnect callback" << std::endl;
+  	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
+		std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_disconnect callback" << std::endl;
+	}
     on_disconnect_cb = reinterpret_cast<on_disconnect_t>(dwAddress);
 
     return 1;
@@ -156,7 +177,10 @@ EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress) {
 
 EXPORT size_t websocket_register_on_data_cb(size_t dwAddress) {
     if(EnableVerbose)
+ 	{
+		boost::lock_guard<boost::mutex> guard(mtx_);
         std::wcout << L"<WsDll-" ARCH_LABEL "> registering on_data callback" << std::endl;
+	}
     on_data_cb = reinterpret_cast<on_data_t>(dwAddress);
 
     return 1;
