@@ -13,6 +13,8 @@
 #include <string>
 #include <map>
 #include <cinttypes>
+#include <queue>
+// #include <future>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -83,7 +85,7 @@ class session : public std::enable_shared_from_this<session> {
     std::wstring path_;
     std::wstring text_;
     bool is_first_write_;
-    std::vector<std::shared_ptr<std::string const>> queue_;
+    std::queue<std::shared_ptr<std::string const>> queue_;
 
 public:
     /// Resolver and socket require an io_context
@@ -104,7 +106,7 @@ public:
         const std::string to_send = utf8_encode(data);
 
         // Always add to queue
-        queue_.push_back(std::make_shared<std::string>(to_send));
+        queue_.push(std::make_shared<std::string>(to_send));
 
         // Are we already writing?
         if (queue_.size() > 1)
@@ -292,7 +294,7 @@ public:
         }
 
         // Remove the string from the queue
-        queue_.erase(queue_.begin());
+        queue_.pop();
 
         // Send the next message if any
         if (!queue_.empty()) {
