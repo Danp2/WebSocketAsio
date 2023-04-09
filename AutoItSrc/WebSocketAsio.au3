@@ -1,4 +1,8 @@
-Global Const $hWEBSOCKDLL = DllOpen("WebSocketAsio-x86.dll")
+#include-once
+
+Global Const $c_ret_size_t = @AutoItX64 ? "UINT64" : "UINT:cdecl"
+Global Const $c_ret_none_t = @AutoItX64 ? "None" : "None:cdecl"
+Global Const $hWEBSOCKDLL = DllOpen("C:\Users\danpo\OneDrive\Documents\GitHub\WebSocketAsio\build\Debug\WebSocketAsio-x86.dll")
 
 
 ; #FUNCTION# ====================================================================================================================
@@ -16,7 +20,7 @@ Global Const $hWEBSOCKDLL = DllOpen("WebSocketAsio-x86.dll")
 ; ===============================================================================================================================
 Func _WS_EnableVerbose($bVerbose)
 	; EXPORT void enable_verbose(intptr_t enabled);
-    Local $aCall = DllCall($hWEBSOCKDLL, "None:cdecl", "enable_verbose", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_none_t, "enable_verbose", _
             "INT_PTR", $bVerbose ? 1 : 0)
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
@@ -36,17 +40,17 @@ EndFunc
 ; Link ..........:
 ; Example .......: No
 ; ===============================================================================================================================
-Func _WS_Connect($sURI, $iTimeout = 2000)
+Func _WS_Connect($sURI, $iTimeout = 5000)
 	; EXPORT size_t websocket_connect(const wchar_t *szServer);
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_connect", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_connect", _
             "wstr", $sURI)
     If @error Then Return SetError(@error, @extended, -1)
 
 	If $iTimeout Then
 		Local $hTimer = TimerInit()
 		Do
-			Sleep(25)
 			If TimerDiff($hTimer) > $iTimeout Then Return SetError(2, 0, -1)
+			Sleep(100)
 		Until _WS_IsConnected()
 	EndIf
 
@@ -70,7 +74,7 @@ EndFunc
 Func _WS_Send($sData)
 ; EXPORT size_t websocket_send(const wchar_t *szMessage, size_t dwLen, bool isBinary);
 	Local $iLength = StringLen($sData)
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_send", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_send", _
             "wstr", $sData, "USHORT", $iLength, "BOOL", 0)
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
@@ -92,7 +96,7 @@ EndFunc
 ; ===============================================================================================================================
 Func _WS_Disconnect()
 	; EXPORT size_t websocket_disconnect();
-   Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_disconnect")
+   Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_disconnect")
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
 EndFunc
@@ -112,7 +116,7 @@ EndFunc
 ; ===============================================================================================================================
 Func _WS_IsConnected()
 	; EXPORT size_t websocket_isconnected();
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_isconnected")
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_isconnected")
     If @error Then Return SetError(@error, @extended, -1)
     Return ($aCall[0] = 1)
 EndFunc
@@ -131,7 +135,7 @@ EndFunc
 ; Example .......: No
 ; ===============================================================================================================================
 Func _WS_RegisterOnConnectCB($hFunc)
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_register_on_connect_cb", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_register_on_connect_cb", _
             "ULONG", DllCallbackGetPtr($hFunc))
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
@@ -151,7 +155,7 @@ EndFunc
 ; Example .......: No
 ; ===============================================================================================================================
 Func _WS_RegisterOnFailCB($hFunc)
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_register_on_fail_cb", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_register_on_fail_cb", _
             "ULONG", DllCallbackGetPtr($hFunc))
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
@@ -171,7 +175,7 @@ EndFunc
 ; Example .......: No
 ; ===============================================================================================================================
 Func _WS_RegisterOnDisconnectCB($hFunc)
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_register_on_disconnect_cb", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_register_on_disconnect_cb", _
             "ULONG", DllCallbackGetPtr($hFunc))
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
@@ -191,32 +195,9 @@ EndFunc
 ; Example .......: No
 ; ===============================================================================================================================
 Func _WS_RegisterOnDataCB($hFunc)
-    Local $aCall = DllCall($hWEBSOCKDLL, "USHORT:cdecl", "websocket_register_on_data_cb", _
+    Local $aCall = DllCall($hWEBSOCKDLL, $c_ret_size_t, "websocket_register_on_data_cb", _
             "ULONG", DllCallbackGetPtr($hFunc))
     If @error Then Return SetError(@error, @extended, -1)
     Return $aCall[0]
 EndFunc
 
-#cs 
-	
-Func _WS_OnConnect()
-	ConsoleWrite('On Connect' & @CRLF)
-	return 1
-EndFunc
-
-Func _WS_OnFail($sFrom)
-	ConsoleWrite('On Fail - ' & $sFrom & @CRLF)
-	return 1
-EndFunc
-
-Func _WS_OnDisconnect()
-	ConsoleWrite('On Disconnect' & @CRLF)
-	return 1
-EndFunc
-
-Func _WS_OnData($vData, $iLength)
-	ConsoleWrite('On Data [' & $iLength  & '] ' & $vData & @CRLF)
-	return 1
-EndFunc
-
-#ce
