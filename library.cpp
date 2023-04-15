@@ -127,9 +127,14 @@ namespace /*anon*/ {
                 ? what + (L": " + utf8_decode(ec.message()))
                 : utf8_decode(ec.message());
 
-            if (s_on_fail_cb)
-                s_on_fail_cb(msg.c_str());
-            CERR(msg);
+            if (ec == net::error::operation_aborted) {
+                VERBOSE(msg);
+            }
+            else {
+                if (s_on_fail_cb)
+                    s_on_fail_cb(msg.c_str());
+                CERR(msg);
+            }
         }
 
       public:
