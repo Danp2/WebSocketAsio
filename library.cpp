@@ -327,8 +327,8 @@ EXPORT size_t websocket_connect(wchar_t const* szServer)
 
     static boost::wregex const s_pat(LR"(^wss?://([\w\.]+):(\d+)(.*)$)");
 
-    boost::wsmatch matches;
-    if (!boost::regex_match(std::wstring(szServer), matches, s_pat)) {
+    boost::wcmatch matches;
+    if (!boost::regex_match(szServer, matches, s_pat)) {
         COUT(L"Failed to parse host & port. Correct example: ws://localhost:8080/");
         return 0;
     }
