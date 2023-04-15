@@ -137,10 +137,10 @@ namespace /*anon*/ {
 
         /// Send message to remote websocket server
         /// \param data to be sent
-        void send_message(std::wstring data)
+        void send_message(std::wstring const& data)
         {
             post(ws_.get_executor(),
-                 std::bind(&Session::do_send_message, shared_from_this(), std::move(data)));
+                 std::bind(&Session::do_send_message, shared_from_this(), utf8_encode(data)));
         }
 
         /// Close the connect between websocket client and server. It call
@@ -168,11 +168,11 @@ namespace /*anon*/ {
         }
 
       private: // all private (do_*/on_*) assumed on strand
-        std::deque<std::wstring> _outbox; // NOTE: reference stability of elements
+        std::deque<std::string> _outbox; // NOTE: reference stability of elements
 
-        void do_send_message(std::wstring data)
+        void do_send_message(std::string data)
         {
-            VERBOSE(L"Sending message: " << data);
+            VERBOSE(L"Sending message: " << utf8_decode(data));
             _outbox.push_back(std::move(data)); // extend lifetime to completion of async write
 
             if (_outbox.size()==1) // need to start write chain?
