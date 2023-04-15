@@ -160,10 +160,10 @@ namespace /*anon*/ {
             host_ = std::move(host);
             path_ = std::move(path);
 
-            VERBOSE(L"Run host_: " << host << L", port: " << port << L", path_: " << path_);
+            VERBOSE(L"Run host_: " << host_ << L", port: " << port << L", path_: " << path_);
 
             // Look up the domain name
-            resolver_.async_resolve(utf8_encode(host), utf8_encode(port),
+            resolver_.async_resolve(utf8_encode(host_), utf8_encode(port),
                                     beast::bind_front_handler(&Session::on_resolve, shared_from_this()));
         }
 
@@ -327,8 +327,8 @@ EXPORT size_t websocket_connect(wchar_t const* szServer)
 
     static boost::wregex const s_pat(LR"(^wss?://([\w\.]+):(\d+)(.*)$)");
 
-    boost::wsmatch matches;
-    if (!boost::regex_match(std::wstring(szServer), matches, s_pat)) {
+    boost::wcmatch matches;
+    if (!boost::regex_match(szServer, matches, s_pat)) {
         COUT(L"Failed to parse host & port. Correct example: ws://localhost:8080/");
         return 0;
     }
