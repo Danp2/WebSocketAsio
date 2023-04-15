@@ -251,7 +251,7 @@ namespace /*anon*/ {
             if (_outbox.empty())
                 return;
 
-            ws_.async_write(net::buffer(utf8_encode(_outbox.front())),
+            ws_.async_write(net::buffer(_outbox.front()),
                             beast::bind_front_handler(&Session::on_write, shared_from_this()));
         }
 
