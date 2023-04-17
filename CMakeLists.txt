@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.17)
 project(WebSocketAsio)
 
 set(CMAKE_CXX_STANDARD 17)
+enable_testing()
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
@@ -33,3 +34,5 @@ endif()
 add_library(WebSocketAsio-${arch} SHARED library.cpp library.h)
 target_link_libraries(WebSocketAsio-${arch} PUBLIC boost_regex)
 target_compile_definitions(WebSocketAsio-${arch} PRIVATE -DBUILDING_WSDLL=1)
+
+add_subdirectory(test)
