@@ -13,7 +13,7 @@ namespace websocket = beast::websocket;     // from <boost/beast/websocket.hpp>
 using tcp           = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 using namespace std::chrono_literals;
 
-#define TRACE(stream, msg) do { stream << L"<WsDll-" ARCH_LABEL "> " << msg << std::endl; } while(0)
+#define TRACE(stream, msg) do { stream << L"<WsDll-" ARCH_LABEL L"> " << msg << std::endl; } while(0)
 #define VERBOSE(msg) do { if (s_enable_verbose) { TRACE(std::wcout, msg); } } while(0)
 #define COUT(msg) TRACE(std::wcout, msg)
 #define CERR(msg) TRACE(std::wcerr, msg)
@@ -177,7 +177,7 @@ namespace /*anon*/ {
 
         void do_send_message(std::string data)
         {
-            VERBOSE(L"Sending message: " << utf8_decode(data));
+            VERBOSE(L"Queueing message: " << quoted(utf8_decode(data)));
             _outbox.push_back(std::move(data)); // extend lifetime to completion of async write
 
             if (_outbox.size()==1) // need to start write chain?
@@ -253,9 +253,12 @@ namespace /*anon*/ {
 
         void do_write_loop()
         {
-            if (_outbox.empty())
+            if (_outbox.empty()) {
+                VERBOSE(L"Output queue empty");
                 return;
+            }
 
+            VERBOSE(L"Writing message: " << quoted(utf8_decode(_outbox.front())));
             ws_.async_write(net::buffer(_outbox.front()),
                             beast::bind_front_handler(&Session::on_write, shared_from_this()));
         }
@@ -313,13 +316,13 @@ namespace /*anon*/ {
     };
 }
 
-EXPORT void enable_verbose(intptr_t enabled)
+WSDLLAPI void enable_verbose(intptr_t enabled)
 {
-    COUT(L"Verbose output " << (enabled ? "enabled" : "disabled"));
+    COUT(L"Verbose output " << (enabled ? L"enabled" : L"disabled"));
     s_enable_verbose = enabled;
 }
 
-EXPORT size_t websocket_connect(wchar_t const* szServer)
+WSDLLAPI size_t websocket_connect(wchar_t const* szServer)
 {
     auto new_session = Manager::Install(std::make_shared<Session>());
     if (!new_session) {
@@ -347,7 +350,7 @@ EXPORT size_t websocket_connect(wchar_t const* szServer)
     return 1;
 }
 
-EXPORT size_t websocket_disconnect()
+WSDLLAPI size_t websocket_disconnect()
 {
     if (SessionPtr sess = Manager::Active()) {
         sess->disconnect();
@@ -357,22 +360,22 @@ EXPORT size_t websocket_disconnect()
     return 0;
 }
 
-EXPORT size_t websocket_send(wchar_t const* szMessage, size_t dwLen, bool isBinary)
+WSDLLAPI size_t websocket_send(wchar_t const* szMessage, size_t dwLen, bool /*TODO: isBinary*/)
 {
     if (SessionPtr sess = Manager::Active()) {
-        sess->send_message(szMessage);
+        sess->send_message(std::wstring(szMessage, dwLen));
         return 1;
     }
     CERR(L"Session not active. Can't send data.");
     return 0;
 }
 
-EXPORT size_t websocket_isconnected()
+WSDLLAPI size_t websocket_isconnected()
 {
     return Manager::Active() != nullptr;
 }
 
-EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress)
+WSDLLAPI size_t websocket_register_on_connect_cb(size_t dwAddress)
 {
     VERBOSE(L"Registering on_connect callback");
     s_on_connect_cb = reinterpret_cast<on_connect_t>(dwAddress);
@@ -380,7 +383,7 @@ EXPORT size_t websocket_register_on_connect_cb(size_t dwAddress)
     return 1;
 }
 
-EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress)
+WSDLLAPI size_t websocket_register_on_fail_cb(size_t dwAddress)
 {
     VERBOSE(L"Registering on_fail callback");
     s_on_fail_cb = reinterpret_cast<on_fail_t>(dwAddress);
@@ -388,7 +391,7 @@ EXPORT size_t websocket_register_on_fail_cb(size_t dwAddress)
     return 1;
 }
 
-EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress)
+WSDLLAPI size_t websocket_register_on_disconnect_cb(size_t dwAddress)
 {
     VERBOSE(L"Registering on_disconnect callback");
     s_on_disconnect_cb = reinterpret_cast<on_disconnect_t>(dwAddress);
@@ -396,7 +399,7 @@ EXPORT size_t websocket_register_on_disconnect_cb(size_t dwAddress)
     return 1;
 }
 
-EXPORT size_t websocket_register_on_data_cb(size_t dwAddress)
+WSDLLAPI size_t websocket_register_on_data_cb(size_t dwAddress)
 {
     VERBOSE(L"Registering on_data callback");
     s_on_data_cb = reinterpret_cast<on_data_t>(dwAddress);
