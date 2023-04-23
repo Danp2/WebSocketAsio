@@ -31,8 +31,14 @@ else()
     set(arch x86)
 endif()
 
+set(MY_BOOST_DIR "C:/boost_1_80_0/bin/${arch}/lib/cmake") 
+list(APPEND CMAKE_PREFIX_PATH ${MY_BOOST_DIR}) 
+
+find_package(Boost CONFIG REQUIRED COMPONENTS regex)
+include_directories(${Boost_INCLUDE_DIRS})
+
 add_library(WebSocketAsio-${arch} SHARED library.cpp library.h)
-target_link_libraries(WebSocketAsio-${arch} PUBLIC boost_regex)
+target_link_libraries(WebSocketAsio-${arch} PUBLIC Boost::regex)
 target_compile_definitions(WebSocketAsio-${arch} PRIVATE -DBUILDING_WSDLL=1)
 
 add_subdirectory(test)
