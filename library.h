@@ -24,7 +24,7 @@
 
 #include <cstddef>
 extern "C" {
-    typedef void (*on_connect_t)();
+    // typedef void (*on_connect_t)();
     typedef void (*on_fail_t)(wchar_t const* from);
     typedef void (*on_disconnect_t)();
     typedef void (*on_data_t)(wchar_t const*, size_t);
