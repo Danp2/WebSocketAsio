@@ -19,7 +19,6 @@ using namespace std::chrono_literals;
 #define CERR(msg) TRACE(std::wcerr, msg)
 
 namespace /*anon*/ {
-    // static on_connect_t    s_on_connect_cb{nullptr};
     static on_fail_t       s_on_fail_cb{nullptr};
     static on_disconnect_t s_on_disconnect_cb{nullptr};
     static on_data_t       s_on_data_cb{nullptr};
@@ -116,7 +115,7 @@ namespace /*anon*/ {
         tcp::resolver                        resolver_{ws_.get_executor()};
 
         beast::flat_buffer buffer_;
-        std::wstring       host_, port_, path_; // path part in url. For example: /v2/ws
+        std::wstring       host_, path_; // path part in url. For example: /v2/ws
 
         /// Print error related information in stderr
         /// \param ec instance that contains error related information
@@ -140,41 +139,82 @@ namespace /*anon*/ {
       public:
         Session() = default;
 
-        short connect(wchar_t const* szServer)
+        /// Send message to remote websocket server
+        /// \param data to be sent
+        void send_message(std::wstring const& data)
         {
-            VERBOSE(L"Connecting to the server: " << szServer);
+            post(ws_.get_executor(),
+                 std::bind(&Session::do_send_message, shared_from_this(), utf8_encode(data)));
+        }
 
-            static boost::wregex const s_pat(LR"(^wss?://([\w\.]+):(\d+)(.*)$)");
+        /// Close the connect between websocket client and server. It call
+        /// async_close to call a callback function which also calls user
+        /// registered callback function to deal with close event.
+        void disconnect()
+        {
+            post(ws_.get_executor(), std::bind(&Session::do_disconnect, shared_from_this()));
+        }
 
-            boost::wcmatch matches;
-            if (!boost::regex_match(szServer, matches, s_pat)) {
-                COUT(L"Failed to parse host & port. Correct example: ws://localhost:8080/");
-                return 0;
-            }
-
-            std::wstring path(boost::trim_copy(matches[3].str()));
-            if (path.empty())
-                path = L"/";
-
-            host_ = std::move(matches[1]);
-            port_ = std::move(matches[2]);
+        /// Start the asynchronous operation
+        /// \param host host to be connected
+        /// \param port tcp port to be connected
+        void run(std::wstring host, std::wstring port, std::wstring path)
+        {
+            // Save these for later
+            host_ = std::move(host);
             path_ = std::move(path);
 
-            boost::system::error_code ec;
-            auto const results = resolver_.resolve(utf8_encode(host_), utf8_encode(port_), ec);
-            if (ec)
-            {
-                COUT(L"Failed to resolve IP address");
-                return 0;
+            VERBOSE(L"Run host_: " << host_ << L", port: " << port << L", path_: " << path_);
+
+            // Look up the domain name
+            resolver_.async_resolve(utf8_encode(host_), utf8_encode(port),
+                                    beast::bind_front_handler(&Session::on_resolve, shared_from_this()));
             }
 
-            VERBOSE(L"IP address: " << results->endpoint());
+      private: // all private (do_*/on_*) assumed on strand
+        std::deque<std::string> _outbox; // NOTE: reference stability of elements
+
+        void do_send_message(std::string data)
+        {
+            VERBOSE(L"Queueing message: " << quoted(utf8_decode(data)));
+            _outbox.push_back(std::move(data)); // extend lifetime to completion of async write
+
+            if (_outbox.size()==1) // need to start write chain?
+                do_write_loop();
+        }
+
+        void do_disconnect()
+            {
+            VERBOSE(L"Disconnecting");
+            ws_.async_close(websocket::close_code::normal,
+                            beast::bind_front_handler(&Session::on_close, shared_from_this()));
+            }
+
+        /// Callback function registered by async_resolve method. It is
+        /// called after resolve operation is done. It will call
+        /// async_connect to issue async connecting operation with
+        /// callback function
+        /// \param ec
+        /// \param results
+        void on_resolve(beast::error_code ec, tcp::resolver::results_type const& results)
+        {
+            VERBOSE(L"In on_resolve");
+            if (ec)
+                return fail(ec, L"resolve");
 
             // Set the timeout for the operation
             beast::get_lowest_layer(ws_).expires_after(30s);
 
             // Make the connection on the IP address we get from a lookup
-            beast::get_lowest_layer(ws_).connect(results);
+            beast::get_lowest_layer(ws_).async_connect(
+                results, beast::bind_front_handler(&Session::on_connect, shared_from_this()));
+        }
+
+        void on_connect(beast::error_code ec, tcp::resolver::results_type::endpoint_type ep)
+        {
+            VERBOSE(L"In on_connect");
+            if (ec)
+                return fail(ec, L"connect");
 
             // Turn off the timeout on the tcp_stream, because
             // the websocket stream has its own timeout system.
@@ -192,131 +232,20 @@ namespace /*anon*/ {
             // Perform the websocket handshake
 
             // Host HTTP header includes the port. See https://tools.ietf.org/html/rfc7230#section-5.4
-            ws_.handshake(utf8_encode(host_) + ":" + utf8_encode(port_), utf8_encode(path_)); 
+            ws_.async_handshake(utf8_encode(host_) + ":" + std::to_string(ep.port()), utf8_encode(path_),
+                                beast::bind_front_handler(&Session::on_handshake, shared_from_this()));
+        }
+
+        void on_handshake(beast::error_code ec)
+        {
+            VERBOSE(L"In on_handshake");
+            if (ec)
+                return fail(ec, L"handshake");
 
             // Send the message
             VERBOSE(L"Issue async_read in on_handshake");
             ws_.async_read(buffer_, beast::bind_front_handler(&Session::on_read, shared_from_this()));
-
-            return 1;
         }
-
-        /// Send message to remote websocket server
-        /// \param data to be sent
-        void send_message(std::wstring const& data)
-        {
-            post(ws_.get_executor(),
-                 std::bind(&Session::do_send_message, shared_from_this(), utf8_encode(data)));
-        }
-
-        /// Close the connect between websocket client and server. It call
-        /// async_close to call a callback function which also calls user
-        /// registered callback function to deal with close event.
-        void disconnect()
-        {
-            // post(ws_.get_executor(), std::bind(&Session::do_disconnect, shared_from_this()));
-            VERBOSE(L"Disconnecting");
-            get_lowest_layer(ws_).cancel(); // cause all async operations to abort
-
-            if (!Manager::Clear(shared_from_this())) {
-                // CERR(L"Could not remove active session"); // redundant message when Sessions::Install fails
-            }
-        }
-
-        /// Start the asynchronous operation
-        /// \param host host to be connected
-        /// \param port tcp port to be connected
-        // void run(std::wstring host, std::wstring port, std::wstring path)
-        // {
-        //     // Save these for later
-        //     host_ = std::move(host);
-        //     path_ = std::move(path);
-
-        //     VERBOSE(L"Run host_: " << host_ << L", port: " << port << L", path_: " << path_);
-
-        //     // Look up the domain name
-        //     resolver_.async_resolve(utf8_encode(host_), utf8_encode(port),
-        //                             beast::bind_front_handler(&Session::on_resolve, shared_from_this()));
-        // }
-
-      private: // all private (do_*/on_*) assumed on strand
-        std::deque<std::string> _outbox; // NOTE: reference stability of elements
-
-        void do_send_message(std::string data)
-        {
-            VERBOSE(L"Queueing message: " << quoted(utf8_decode(data)));
-            _outbox.push_back(std::move(data)); // extend lifetime to completion of async write
-
-            if (_outbox.size()==1) // need to start write chain?
-                do_write_loop();
-        }
-
-        // void do_disconnect()
-        // {
-        //     VERBOSE(L"Disconnecting");
-        //     ws_.async_close(websocket::close_code::normal,
-        //                     beast::bind_front_handler(&Session::on_close, shared_from_this()));
-        // }
-
-        /// Callback function registered by async_resolve method. It is
-        /// called after resolve operation is done. It will call
-        /// async_connect to issue async connecting operation with
-        /// callback function
-        /// \param ec
-        /// \param results
-        // void on_resolve(beast::error_code ec, tcp::resolver::results_type const& results)
-        // {
-        //     VERBOSE(L"In on_resolve");
-        //     if (ec)
-        //         return fail(ec, L"resolve");
-
-        //     // Set the timeout for the operation
-        //     beast::get_lowest_layer(ws_).expires_after(30s);
-
-        //     // Make the connection on the IP address we get from a lookup
-        //     beast::get_lowest_layer(ws_).async_connect(
-        //         results, beast::bind_front_handler(&Session::on_connect, shared_from_this()));
-        // }
-
-        // void on_connect(beast::error_code ec, tcp::resolver::results_type::endpoint_type ep)
-        // {
-        //     VERBOSE(L"In on_connect");
-        //     if (ec)
-        //         return fail(ec, L"connect");
-
-        //     // Turn off the timeout on the tcp_stream, because
-        //     // the websocket stream has its own timeout system.
-        //     beast::get_lowest_layer(ws_).expires_never();
-
-        //     // Set suggested timeout settings for the websocket
-        //     ws_.set_option(websocket::stream_base::timeout::suggested(beast::role_type::client));
-
-        //     // Set a decorator to change the User-Agent of the handshake
-        //     ws_.set_option(websocket::stream_base::decorator([](websocket::request_type& req) {
-        //         req.set(http::field::user_agent,
-        //                 std::string(BOOST_BEAST_VERSION_STRING) + " WsDll");
-        //     }));
-
-        //     // Perform the websocket handshake
-
-        //     // Host HTTP header includes the port. See https://tools.ietf.org/html/rfc7230#section-5.4
-        //     ws_.async_handshake(utf8_encode(host_) + ":" + std::to_string(ep.port()), utf8_encode(path_),
-        //                         beast::bind_front_handler(&Session::on_handshake, shared_from_this()));
-        // }
-
-        // void on_handshake(beast::error_code ec)
-        // {
-        //     VERBOSE(L"In on_handshake");
-        //     if (ec)
-        //         return fail(ec, L"handshake");
-
-        //     if (s_on_connect_cb)
-        //         s_on_connect_cb();
-
-        //     // Send the message
-        //     VERBOSE(L"Issue async_read in on_handshake");
-        //     ws_.async_read(buffer_, beast::bind_front_handler(&Session::on_read, shared_from_this()));
-        // }
 
         void do_write_loop()
         {
@@ -365,21 +294,21 @@ namespace /*anon*/ {
         /// Only called when client proactively closes connection by calling
         /// websocket_disconnect. 
         /// \param ec instance of error code
-        // void on_close(beast::error_code ec)
-        // {
-        //     VERBOSE(L"In on_close");
-        //     if (ec)
-        //         fail(ec, L"close");
+        void on_close(beast::error_code ec)
+        {
+            VERBOSE(L"In on_close");
+            if (ec)
+                fail(ec, L"close");
 
-        //     if (s_on_disconnect_cb)
-        //         s_on_disconnect_cb();
+            if (s_on_disconnect_cb)
+                s_on_disconnect_cb();
 
-        //     get_lowest_layer(ws_).cancel(); // cause all async operations to abort
+            get_lowest_layer(ws_).cancel(); // cause all async operations to abort
 
-        //     if (!Manager::Clear(shared_from_this())) {
-        //         // CERR(L"Could not remove active session"); // redundant message when Sessions::Install fails
-        //     }
-        // }
+            if (!Manager::Clear(shared_from_this())) {
+                // CERR(L"Could not remove active session"); // redundant message when Sessions::Install fails
+            }
+        }
     };
 }
 
@@ -398,11 +327,22 @@ WSDLLAPI size_t websocket_connect(wchar_t const* szServer)
     }
     assert(new_session == Manager::Active());
 
-    if (!new_session->connect(szServer))
-    {
-        COUT(L"Connect attempt failed.");
+    VERBOSE(L"Connecting to the server: " << szServer);
+
+    static boost::wregex const s_pat(LR"(^wss?://([\w\.]+):(\d+)(.*)$)");
+
+    boost::wcmatch matches;
+    if (!boost::regex_match(szServer, matches, s_pat)) {
+        COUT(L"Failed to parse host & port. Correct example: ws://localhost:8080/");
         return 0;
     }
+
+    std::wstring path(boost::trim_copy(matches[3].str()));
+    if (path.empty())
+        path = L"/";
+
+    new_session->run(matches[1], matches[2], std::move(path));
+
     return 1;        
 }
 
@@ -430,14 +370,6 @@ WSDLLAPI size_t websocket_isconnected()
 {
     return Manager::Active() != nullptr;
 }
-
-// WSDLLAPI size_t websocket_register_on_connect_cb(size_t dwAddress)
-// {
-//     VERBOSE(L"Registering on_connect callback");
-//     s_on_connect_cb = reinterpret_cast<on_connect_t>(dwAddress);
-
-//     return 1;
-// }
 
 WSDLLAPI size_t websocket_register_on_fail_cb(size_t dwAddress)
 {
