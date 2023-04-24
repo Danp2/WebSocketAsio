@@ -13,13 +13,6 @@ using namespace std::chrono_literals;
 
 namespace { // diagnostics tracing helpers
     using std::this_thread::sleep_for;
-    static auto timestamp() {
-        auto        now   = std::chrono::high_resolution_clock::now;
-        static auto start = now();
-        auto        t     = now();
-
-        return (t - start) / 1.ms;
-    }
 
     static std::atomic_int tid_gen{0};
     thread_local int       tid = tid_gen++;
@@ -28,7 +21,7 @@ namespace { // diagnostics tracing helpers
     template <typename... Args>
     void trace(Args const&... args) {
         std::lock_guard<std::mutex> lk(console_mx);
-        std::wcout << L"\tThread:" << std::setw(2) << tid << std::right << std::setw(10) << timestamp() << L"ms ";
+        std::wcout << L"\tThread:" << std::setw(2) << tid << L" ";
         (std::wcout << ... << args) << std::endl;
     }
 
@@ -51,52 +44,41 @@ int main()
 {
     std::wcout << std::fixed << std::setprecision(2);
 
-    struct {
-        on_fail_t       on_fail; // allow type safe assignments
-        on_connect_t    on_connect;
-        on_disconnect_t on_disconnect;
-        on_data_t       on_data;
-
-        void do_register() {
-            ::websocket_register_on_fail_cb(unsafe_cb(on_fail));
-            ::websocket_register_on_data_cb(unsafe_cb(on_data));
-            ::websocket_register_on_connect_cb(unsafe_cb(on_connect));
-            ::websocket_register_on_disconnect_cb(unsafe_cb(on_disconnect));
-        };
-
-    } callbacks{
-        [](wchar_t const* wsz) { trace(L"ON_FAIL: ", std::quoted(wsz)); } ,
-        []()                   { trace(L"ON_CONNECT");                  } ,
-        []()                   { trace(L"ON_DISCONNECT");               } ,
-        [](wchar_t const* wsz, size_t n) {
-            trace(L"ON_DATA: ", std::quoted(std::wstring_view(wsz).substr(0, n)));
-        },
-    };
+    on_fail_t       on_fail       = [](websocket_handle_t h, wchar_t const* wsz) { trace(L"ON_FAIL handle#", h, ": ", std::quoted(wsz)); };
+    on_disconnect_t on_disconnect = [](websocket_handle_t h) { trace(L"ON_DISCONNECT handle#", h); };
+    on_data_t       on_data       = [](websocket_handle_t h, wchar_t const* wsz, size_t n) { trace(L"ON_DATA handle#", h, ": ", std::quoted(std::wstring_view(wsz).substr(0, n))); };
 
     ::enable_verbose(1);
-    callbacks.do_register();
 
-    for (auto delay : {0ms, 200ms}) {
-        std::wcout << L"\n=========================================== Start (with " << delay / 1.s
-                   << L"s delay) ======\n" << std::endl;
+    auto url = L"ws://localhost:8080/something";
 
-        TRACED(::websocket_isconnected());
+    {
+        std::wcout << L"\n======================= First ==============\n" << std::endl;
 
-        TRACED(::websocket_connect(L"ws://localhost:8080/something"));
-        TRACED(::websocket_isconnected());
+        websocket_handle_t h {};
+        TRACED(::websocket_isconnected(h));
+        h = TRACED(::websocket_connect(url, unsafe_cb(on_fail), unsafe_cb(on_disconnect), unsafe_cb(on_data)));
+        TRACED(::websocket_isconnected(h));
 
-        if (delay > 0s)
-            sleep_for(delay);
+        TRACED(::websocket_send(h, L"First message\n", 14));
 
-        TRACED(::websocket_send(L"First message\n", 14, false));
-        if (delay > 0s)
-            sleep_for(delay);
+        TRACED(::websocket_disconnect(h));
+        TRACED(::websocket_isconnected(h));
+    }
 
-        TRACED(::websocket_disconnect());
-        TRACED(::websocket_isconnected());
-        sleep_for(100ms);
-        TRACED(::websocket_isconnected());
+    {
+        std::wcout << L"\n======================= Second ==============\n" << std::endl;
 
-        sleep_for(1s);
+        websocket_handle_t h {};
+        TRACED(::websocket_isconnected(h));
+        h = TRACED(::websocket_connect(url, unsafe_cb(on_fail), unsafe_cb(on_disconnect), unsafe_cb(on_data)));
+        TRACED(::websocket_isconnected(h));
+
+        sleep_for(2s);
+        TRACED(::websocket_send(h, L"Second message\n", 15));
+
+        sleep_for(2s);
+        TRACED(::websocket_disconnect(h));
+        TRACED(::websocket_isconnected(h));
     }
 }
