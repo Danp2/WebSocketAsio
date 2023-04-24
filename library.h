@@ -24,19 +24,18 @@
 
 #include <cstddef>
 extern "C" {
-    typedef void (*on_fail_t)(wchar_t const* from);
-    typedef void (*on_disconnect_t)();
-    typedef void (*on_data_t)(wchar_t const*, size_t);
+    typedef intptr_t websocket_handle_t;
+    typedef void (*on_fail_t)(websocket_handle_t, wchar_t const* from);
+    typedef void (*on_disconnect_t)(websocket_handle_t);
+    typedef void (*on_data_t)(websocket_handle_t, wchar_t const*, size_t);
+
+    WSDLLAPI websocket_handle_t websocket_connect(wchar_t const* szServer, size_t dwOnFail,
+                                                  size_t dwOnDisconnect, size_t dwOnData);
 
     WSDLLAPI void   enable_verbose(intptr_t enabled);
-    WSDLLAPI size_t websocket_connect(wchar_t const* szServer);
-    WSDLLAPI size_t websocket_disconnect();
-    WSDLLAPI size_t websocket_send(wchar_t const* szMessage, size_t dwLen, bool isBinary);
-    WSDLLAPI size_t websocket_isconnected();
-
-    WSDLLAPI size_t websocket_register_on_fail_cb(size_t dwAddress);
-    WSDLLAPI size_t websocket_register_on_disconnect_cb(size_t dwAddress);
-    WSDLLAPI size_t websocket_register_on_data_cb(size_t dwAddress);
+    WSDLLAPI size_t websocket_disconnect(websocket_handle_t);
+    WSDLLAPI size_t websocket_send(websocket_handle_t, wchar_t const* szMessage, size_t dwLen);
+    WSDLLAPI size_t websocket_isconnected(websocket_handle_t);
 }
 
 #endif // WebSocketAsio_LIBRARY_H
